@@ -2,6 +2,9 @@
 #include "packet.h"
 #include <pcap.h>
 #include <string>
+#include "input_packet.h"
+#include <vector>
+#include <iomanip>
 
 using namespace std;
 int main()
@@ -15,29 +18,40 @@ int main()
 
 	struct pcap_pkthdr *header;
 
+
 	const u_char *data;
 
 	u_int packetCount = 0;
 
-	while (int returnValue = pcap_next_ex(pcap, &header, &data) >= 0)
+	vector<input_packet> in_tab;
+
+	while (pcap_next_ex(pcap, &header, &data) >= 0)
 	    {
-	        printf("Packet # %i\n", ++packetCount);
-	        printf("Packet size: %d bytes\n", header->len);
+	//        printf("Packet # %i", ++packetCount);
+	//        printf("	Packet length: %5d bytes", header->len);
+
+	        int number = ++packetCount;
+	        double time = double(header->ts.tv_sec) + (double(header->ts.tv_usec)/1000000);
+	        int length = header->len;
+
+	        input_packet *pckt = new input_packet(number,time,length);
+	     //   cout << (*pckt).getNumber();
+
+
+	        in_tab.push_back(*pckt);
 
 	        if (header->len != header->caplen)
 	            printf("Warning! Capture size different than packet size: %ld bytes\n", header->len);
 
-	        printf("Epoch Time: %d:%d seconds\n", header->ts.tv_sec, header->ts.tv_usec);
-
-	        for (u_int i=0; (i < header->caplen ) ; i++)
-	        {
-
-	            if ( (i % 16) == 0) printf("\n");
+	 //       printf("	Timestamp: %d:%d seconds\n", header->ts.tv_sec, header->ts.tv_usec);
 
 
-	            printf("%.2x ", data[i]);
-	        }
-
-	        printf("\n\n");
 	    }
+
+	for(int i = 0; i < in_tab.size() ; i++)
+		in_tab[i].printPacket();
+
+
+
+	return 0;
 }

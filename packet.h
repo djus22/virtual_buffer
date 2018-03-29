@@ -1,16 +1,23 @@
 #pragma once
+#include <iostream>
+#include <iomanip>
+using namespace std;
+
 class packet
 {
 public:
 	packet();
-	virtual int getTime();
-	virtual void setTime(int t);
+	virtual double getTime();
+	virtual void setTime(double t);
 	virtual int getLength();
 	virtual void setLength(int l);
 	virtual int getNumber();
 	virtual void setNumber(int n);
+	virtual void printPacket();
+	virtual ~packet();
 private:
 	int number;
-	int time;
+	double time;
 	int length;
+
 };
