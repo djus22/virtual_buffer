@@ -7,6 +7,7 @@ class packet
 {
 public:
 	packet();
+	packet(int num, double time, int len);
 	virtual double getTime();
 	virtual void setTime(double t);
 	virtual int getLength();

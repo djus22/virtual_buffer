@@ -8,6 +8,12 @@ packet::packet()
 	this->time = 0;
 	this->length = 0;
 }
+packet::packet(int number, double time, int length)
+{
+	this->number = number;
+	this->time = time;
+	this->length = length;
+}
 
 double packet::getTime()
 {
