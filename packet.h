@@ -3,18 +3,22 @@
 #include <iomanip>
 using namespace std;
 
+
+
+
 class packet
 {
 public:
 	packet();
 	packet(int num, double time, int len);
-	virtual double getTime();
-	virtual void setTime(double t);
-	virtual int getLength();
-	virtual void setLength(int l);
-	virtual int getNumber();
-	virtual void setNumber(int n);
-	virtual void printPacket();
+	double getTime();
+	void setTime(double t);
+	int getLength();
+	void setLength(int l);
+	int getNumber();
+	void setNumber(int n);
+	char* printPacket();
+
 	virtual ~packet();
 private:
 	int number;

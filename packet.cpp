@@ -45,13 +45,14 @@ void packet::setNumber(int n)
 	this->number = n;
 }
 
-void packet::printPacket()
+char* packet::printPacket()
 {
 	cout << "packet number: " << this->number << "\n";
 	cout << "packet time: " << setprecision(16) << this->time << " seconds" << "\n";
 	cout << "packet length: " << this->length << " bytes" << "\n\n";
 
 }
+
 packet::~packet()
 {
 
