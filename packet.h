@@ -18,7 +18,6 @@ public:
 	int getNumber();
 	void setNumber(int n);
 	char* printPacket();
-
 	virtual ~packet();
 private:
 	int number;
