@@ -18,6 +18,7 @@ public:
 	int getNumber();
 	void setNumber(int n);
 	char* printPacket();
+	static bool sortByTime(packet &p1 , packet &p2);
 	virtual ~packet();
 private:
 	int number;

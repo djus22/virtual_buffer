@@ -52,7 +52,10 @@ char* packet::printPacket()
 	cout << "packet length: " << this->length << " bytes" << "\n\n";
 
 }
-
+bool packet::sortByTime(packet &p1 , packet &p2)
+{
+	return (p1.getTime() < p2.getTime());
+}
 
 
 

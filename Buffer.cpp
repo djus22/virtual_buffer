@@ -1,14 +1,13 @@
 #include "Buffer.h"
 
-
-Buffer::Buffer(int size)
-{
-	this->size = size;
-}
 Buffer::Buffer()
 {
 	this->size = 0;
+	this->emptyCounter = 0;
+	this->emptySince = 0;
+	this->emptyTime = 0;
 }
+
 
 int Buffer::getSize()
 {
@@ -18,27 +17,42 @@ void Buffer::setSize(int size)
 {
 	this->size = size;
 }
-void Buffer::incrSize(int size)
+void Buffer::incrSize(packet p)
 {
-	this->size += size;
+	this->size += p.getLength();
+	if(this->emptySince > 0)
+		this->emptyTime += (p.getTime() - this->emptySince);
+	this->emptySince = -1;
 }
 
-int Buffer::getDeclCntr()
+void Buffer::decrSize(packet p)
 {
-	return this->declineCounter;
+	if(this->size > p.getLength())
+		this->size -= p.getLength();
+	else
+	{
+		this->size = 0;
+		this->emptySince = p.getTime();
+	}
 }
-void Buffer::incrDeclCntr(int decl)
+
+
+int Buffer::getEmptyCounter()
 {
-	this->declineCounter += decl;
+	return this->emptyCounter;
 }
-void Buffer::setDeclCntr(int decl)
+void Buffer::incrEmptyCounter()
 {
-	this->declineCounter = decl;
+	this->emptyCounter++;
 }
 
 bool Buffer::isEmpty()
 {
 	return (this->size) ? false : true;
+}
+double Buffer::getEmptyTime()
+{
+	return this->emptyTime;
 }
 
 Buffer::~Buffer()

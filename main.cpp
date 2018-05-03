@@ -163,7 +163,6 @@ int main()
 
 
 											time = ((double(dts - dts_zero)) / 90000);
-											cout << setprecision(11) << time << "\n";
 										}
 										else if (static_cast<int>(data[i+7]) >= 128)// only PTS
 										{
@@ -189,7 +188,6 @@ int main()
 												pts_zero_flag = false;
 											}
 											time = (double(pts - pts_zero)) / 90000;
-											cout << setprecision(11) << time << "\n";
 										}
 
 										packet *pckt = new packet(number,time,dataLength);
@@ -208,8 +206,8 @@ int main()
 	    }
 
 
+	sort(out_tab.begin() , out_tab.end() , packet::sortByTime);
 
-//	sort(out_tab.begin() , out_tab.end());
 
 	fstream plik_out("wyjscie.txt" , ios::out);
 
@@ -223,13 +221,57 @@ int main()
 
 		}
 	}
+
+
+	fstream stat("statistics.txt" , ios::out);
+	if(stat.good())
+	{
+
+		Buffer *buff = new Buffer();
+		u_int in = 0 , out = 0;
+		double delta = 0;
+		cout << "Prosze podac opoznienie wczytywania pliku wyjsciowego: ";
+		cin >> delta;
+
+		for(u_int i = 0; i < out_tab.size() ; i++)
+		{
+			out_tab[i].setTime(out_tab[i].getTime() + delta);
+		}
+
+		for(; (in < in_tab.size() && out < out_tab.size());)
+		{
+			if(in_tab[in].getTime() <= out_tab[out].getTime())
+			{
+				stat <<"time: " << in_tab[in].getTime() << " - dodano " << in_tab[in].getLength() << " bajtow danych\n";
+				buff->incrSize(in_tab[in]);
+				in++;
+			}
+			else
+			{
+				if(buff->isEmpty())
+				{
+					cout << "ERR: bufor jest pusty, nie mozna pobrac danych\n";
+					buff->incrEmptyCounter();
+					stat <<"time: " << out_tab[out].getTime() << " - nieudana proba pobrania danych\n";
+				}
+				else
+				{
+					buff->decrSize(out_tab[out]);
+					stat <<"time: " << out_tab[out].getTime() << " - pobrano " << out_tab[out].getLength() << " bajtow danych\n";
+				}
+				out++;
+			}
+
+		}
+
+		stat << "liczba nieudanych prob pobrania danych z bufora: " << buff->getEmptyCounter() << "\n";
+		stat << "bufor byl pusty lacznie przez: " << buff->getEmptyTime() << " sekund\n";
+
+
+	}
+
 	plik_out.close();
 	plik_hex.close();
-
-
-
-
-
-
+	stat.close();
 	return 0;
 }
