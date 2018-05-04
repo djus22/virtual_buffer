@@ -47,9 +47,9 @@ void packet::setNumber(int n)
 
 char* packet::printPacket()
 {
-	cout << "packet number: " << this->number << "\n";
-	cout << "packet time: " << setprecision(16) << this->time << " seconds" << "\n";
-	cout << "packet length: " << this->length << " bytes" << "\n\n";
+	cout << "pakiet numer: " << this->number << "\n";
+	cout << "czas: " << setprecision(16) << this->time << " sekund" << "\n";
+	cout << "dlugosc pakietu: " << this->length << " bajtow" << "\n\n";
 
 }
 bool packet::sortByTime(packet &p1 , packet &p2)

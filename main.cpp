@@ -16,7 +16,6 @@ int main()
 	const struct ip* ipHeader;
 	const struct rtpHeader* rtpHdr;
 	const struct udphdr* udpHeader;
-	const struct pes* pes;
 
 
 	const u_char *data;
@@ -65,13 +64,14 @@ int main()
 	{
 		for(u_int i = 0; i < in_tab.size() ; i++)
 		{
-			plik_in << "packet number: " << in_tab[i].getNumber() << "	";
-			plik_in << "packet time: " << setprecision(16) << setw(18) << in_tab[i].getTime() << " seconds" << "		";
-			plik_in << "packet length: "  << setw(8) << in_tab[i].getLength() << " bytes" << "\n";
+			plik_in << "pakiet numer: " << setw(4) << in_tab[i].getNumber() << "	";
+			plik_in << "czas: " << setprecision(8) << setw(11) << in_tab[i].getTime() << " sekund" << "	";
+			plik_in << "dlugosc pakietu: "  << setw(8) << in_tab[i].getLength() << " bajtow" << "\n";
 
 		}
 	}
 	plik_in.close();
+	cout << "wczytywanie pliku wejsciowego: OK\n";
 
 
 //***********************************************************************************************************************
@@ -82,7 +82,6 @@ int main()
 	vector<packet> out_tab;
 
 
-	fstream plik_hex("hex.txt" , ios::out | ios::in);
 
 	packetCount = 0;
 	bool pts_zero_flag = true;
@@ -108,16 +107,14 @@ int main()
 					rtpHdr = (struct rtpHeader*)(data + sizeof(struct udphdr));
 
 
-					int offset = sizeof(struct ether_header) + sizeof(struct ip) + sizeof(struct rtpHeader) + sizeof(struct udphdr);
-					if(plik_hex.good())
-						{
+					int offset = sizeof(struct ether_header) + sizeof(struct ip)
+							+ sizeof(struct rtpHeader) + sizeof(struct udphdr);
 
 							short counter = 0;
 							for(u_int i = offset ; i < header->caplen ; i++, counter++)
 								{
 									if((counter % 188) == 0)
 									{
-										plik_hex << "\n";
 										counter = 0;
 									}
 									bool isPES;
@@ -126,7 +123,9 @@ int main()
 									else
 										isPES = false;
 
-									if(isPES && static_cast<int>(data[i]) == 0 && static_cast<int>(data[i+1]) == 0 && static_cast<int>(data[i+2]) == 1)
+									if(isPES && static_cast<int>(data[i]) == 0
+											&& static_cast<int>(data[i+1]) == 0
+											&& static_cast<int>(data[i+2]) == 1)
 									{
 										int number = ++packetCount;
 										int l_byte = static_cast<int>(data[i+4]);
@@ -195,10 +194,7 @@ int main()
 
 									}
 
-								plik_hex << hex << setfill('0') << setw(2) << static_cast<int>(data[i]) << " ";
 								}
-								plik_hex << "\n ";
-						}
 
 				}
 			}
@@ -209,19 +205,30 @@ int main()
 	sort(out_tab.begin() , out_tab.end() , packet::sortByTime);
 
 
+	double delta = 0;
+	cout << "Prosze podac opoznienie wczytywania pliku wyjsciowego w sekundach: ";
+	cin >> delta;
+
+	for(u_int i = 0; i < out_tab.size() ; i++)
+	{
+		out_tab[i].setTime(out_tab[i].getTime() + delta);
+	}
+
+
 	fstream plik_out("wyjscie.txt" , ios::out);
 
 	if(plik_out.good())
 	{
 		for(u_int i = 0; i < out_tab.size() ; i++)
 		{
-			plik_out << "packet number: " << out_tab[i].getNumber() << "	";
-			plik_out << "packet time: " << setprecision(8) << setw(11) << out_tab[i].getTime() << " seconds" << "			";
-			plik_out << "packet length: "  << setw(8) << out_tab[i].getLength() << " bytes" << "\n";
+			plik_out << "pakiet numer: " << setw(4) << out_tab[i].getNumber() << "	";
+			plik_out << "czas: " << setprecision(8) << setw(11) << out_tab[i].getTime() << " sekund" << "	";
+			plik_out << "dlugosc pakietu: "  << setw(8) << out_tab[i].getLength() << " bajtow" << "\n";
 
 		}
 	}
 
+	cout << "wczytywanie pliku wyjsciowego: OK\n";
 
 	fstream stat("statistics.txt" , ios::out);
 	if(stat.good())
@@ -229,49 +236,66 @@ int main()
 
 		Buffer *buff = new Buffer();
 		u_int in = 0 , out = 0;
-		double delta = 0;
-		cout << "Prosze podac opoznienie wczytywania pliku wyjsciowego: ";
-		cin >> delta;
 
-		for(u_int i = 0; i < out_tab.size() ; i++)
-		{
-			out_tab[i].setTime(out_tab[i].getTime() + delta);
-		}
 
-		for(; (in < in_tab.size() && out < out_tab.size());)
+		for(;;)
 		{
-			if(in_tab[in].getTime() <= out_tab[out].getTime())
+			if((in_tab[in].getTime() <= out_tab[out].getTime() && in != in_tab.size()) || out == out_tab.size())
 			{
-				stat <<"time: " << in_tab[in].getTime() << " - dodano " << in_tab[in].getLength() << " bajtow danych\n";
-				buff->incrSize(in_tab[in]);
-				in++;
+				stat <<"czas: " << setprecision(8) << setw(11) << in_tab[in].getTime() <<
+						" - dodano " << in_tab[in].getLength() << " bajtow danych\n";
+				if(in_tab[in].getLength() > 0)
+					buff->incrSize(&in_tab[in]);
+				if(in < in_tab.size())
+				{
+					in++;
+				}
 			}
 			else
 			{
 				if(buff->isEmpty())
 				{
-					cout << "ERR: bufor jest pusty, nie mozna pobrac danych\n";
+
 					buff->incrEmptyCounter();
-					stat <<"time: " << out_tab[out].getTime() << " - nieudana proba pobrania danych\n";
+					if(buff->getEmptySince() == -999999999)
+						buff->setEmptySince(&out_tab[out]);
+					stat <<"czas: " << setprecision(8) << setw(11) << out_tab[out].getTime() << " - nieudana proba pobrania danych\n";
 				}
 				else
 				{
-					buff->decrSize(out_tab[out]);
-					stat <<"time: " << out_tab[out].getTime() << " - pobrano " << out_tab[out].getLength() << " bajtow danych\n";
+					int dwnld = (out_tab[out].getLength() > buff->getSize()) ? buff->getSize() : out_tab[out].getLength() ;
+					buff->decrSize(&out_tab[out]);
+					stat << "czas: " << setprecision(8) << setw(11) << out_tab[out].getTime() << " - pobrano " << dwnld << " bajtow danych\n";
 				}
-				out++;
+				if(out < out_tab.size())
+				{
+					out++;
+				}
+
 			}
 
+			if(in == in_tab.size() && out == out_tab.size())
+			{
+				if(in_tab[in-1].getTime() < out_tab[out-1].getTime())
+				{
+					buff->incrEmptyTime(&out_tab[out-1]);
+				}
+				break;
+			}
 		}
 
 		stat << "liczba nieudanych prob pobrania danych z bufora: " << buff->getEmptyCounter() << "\n";
-		stat << "bufor byl pusty lacznie przez: " << buff->getEmptyTime() << " sekund\n";
+		stat << "bufor byl pusty lacznie przez: " << setprecision(8) << buff->getEmptyTime() << " sekund\n";
+		stat << "lacznie zaladowano danych: " << buff->getUploaded() << " bajtow\n";
+		stat << "lacznie pobrano danych: " << buff->getDownloaded() << " bajtow\n";
 
-
+		delete buff;
 	}
 
+	cout << "statystyka zajetosci bufora znajduje sie w pliku: statistics.txt \n";
+
 	plik_out.close();
-	plik_hex.close();
+//	plik_hex.close();
 	stat.close();
 	return 0;
 }
