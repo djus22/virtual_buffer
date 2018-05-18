@@ -19,9 +19,10 @@ public:
 	void setNumber(int n);
 	char* printPacket();
 	static bool sortByTime(packet &p1 , packet &p2);
+	static bool sortByNumber(packet &p1 , packet &p2);
 	virtual ~packet();
 private:
-	int number;
+	long long int number;
 	double time;
 	int length;
 

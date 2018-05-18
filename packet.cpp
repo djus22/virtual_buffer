@@ -57,7 +57,10 @@ bool packet::sortByTime(packet &p1 , packet &p2)
 	return (p1.getTime() < p2.getTime());
 }
 
-
+bool packet::sortByNumber(packet &p1 , packet &p2)
+{
+	return (p1.getNumber() < p2.getNumber());
+}
 
 
 

@@ -14,21 +14,24 @@ int main()
 
 	const struct ether_header* ethernetHeader;
 	const struct ip* ipHeader;
-	const struct rtpHeader* rtpHdr;
-	const struct udphdr* udpHeader;
-
+	const struct tcphdr* tcpHeader;
 
 	const u_char *data;
 	u_int packetCount = 0;
 
 	vector<packet> in_tab;
-
+	set<long long int> s;
+	int *in_bytes = new int{0};
+	bool isHttp{false};
 
 	while (pcap_next_ex(pcap, &header, &data) >= 0)
 		{
 
-			int number = ++packetCount;
+			int number;
+			long long int seq_nr;
 
+
+			// setting time for packet
 			static double const zero_time = double(header->ts.tv_sec) + (double(header->ts.tv_usec)/1000000);
 			double time = double(header->ts.tv_sec) + (double(header->ts.tv_usec)/1000000) - zero_time;
 
@@ -40,10 +43,37 @@ int main()
 
 				if(ipHeader->ip_p == IPPROTO_TCP)
 				{
-					dataLength = header->len - (sizeof(struct ether_header) + sizeof(struct ip) + sizeof(struct tcphdr));
+					int offset = (sizeof(struct ether_header) + sizeof(struct ip) + sizeof(struct tcphdr));
+
+					tcpHeader = (tcphdr*)(data + sizeof(struct ether_header) + sizeof(struct ip));
+					seq_nr = tcpHeader->th_seq;
+
+					number = ++packetCount;
+
+
+					// checking if packet is a HTTP header
+					for(u_int i = offset ; i < header->len ; i++)
+					{
+						if(static_cast<int>(data[i]) == 'H' && static_cast<int>(data[i+1]) == 'T' && static_cast<int>(data[i+2]) == 'T' && static_cast<int>(data[i+3]) == 'P')
+								isHttp = true;
+
+						if(static_cast<int>(data[i]) == 'f' && static_cast<int>(data[i+1]) == 'i' && static_cast<int>(data[i+2]) == 'l' && static_cast<int>(data[i+3]) == 'e'
+							&& static_cast<int>(data[i+4]) == 's' && static_cast<int>(data[i+5]) == 'i' && static_cast<int>(data[i+6]) == 'z' && static_cast<int>(data[i+7]) == 'e')
+						{
+							isHttp = false;
+							offset = i+7;
+						}
+
+					}
+
+
+					//calculating paylod size (packet reduced by ether, ip, tcp and optional http headers)
+					dataLength = header->len - offset;
+
 
 				}
 			}
+
 
 			int length = dataLength - 12;
 			if(number == 1)
@@ -51,15 +81,26 @@ int main()
 					length -= 8;
 				}
 
+			// adding not retransmitted packets only
+			if(insertInSet(s , seq_nr))
+			{
+				if(length && !isHttp) // adding only not empty packets without http header
+				{
+					*in_bytes += length;
+					packet *pckt = new packet(number,time,length);
+					in_tab.push_back(*pckt);
 
-			packet *pckt = new packet(number,time,length);
-			in_tab.push_back(*pckt);
-
+				}
+			}
 
 	    }
 
-	fstream plik_in("wejcie.txt" , ios::out );
 
+	s.clear();
+
+
+	// writing stats of packet to file
+	fstream plik_in("wejscie.txt" , ios::out );
 	if(plik_in.good())
 	{
 		for(u_int i = 0; i < in_tab.size() ; i++)
@@ -80,14 +121,28 @@ int main()
 	pcap = pcap_open_offline(file.c_str(), errbuff);
 
 	vector<packet> out_tab;
+	int *out_bytes = new int{0};
+	int *stamp = new int{-1};
 
+	fstream plik_hex("hex.txt" , ios::out | ios::in);
 
 
 	packetCount = 0;
-	bool pts_zero_flag = true;
-	bool dts_zero_flag = true;
-	unsigned long long pts_zero;
-	unsigned long long dts_zero;
+
+	unsigned long long pts_zero{0};		// lowest PTS of packets with only PTS
+	unsigned long long dts_zero{0};		// lowest DTS of packets with PTS and DTS
+	unsigned long long pts_dts_zero{0};	// lowest PTS of packets with PTS and DTS
+
+	cout << "Prosze podac znacznik czasu wg ktorego oznaczac pakiety wyjsciowe:\n"
+		<< "0. PTS\n" << "1. DTS\n";
+
+	while(*stamp != 1 && *stamp != 0)
+		{
+			cin >> *stamp;
+			if(*stamp != 1 && *stamp != 0)
+				cout << "Podales zle wartosci\n";
+		}
+
 
 
 	while (pcap_next_ex(pcap, &header, &data) >= 0)
@@ -95,7 +150,6 @@ int main()
 
 
 			double time ;
-			int dataLength = 0;
 			ethernetHeader = (struct ether_header*)data;
 			if(ntohs(ethernetHeader->ether_type) == ETHERTYPE_IP)
 			{
@@ -103,68 +157,161 @@ int main()
 
 				if(ipHeader->ip_p == IPPROTO_UDP)
 				{
-					udpHeader = (struct udphdr*)(data + sizeof(struct ip));
-					rtpHdr = (struct rtpHeader*)(data + sizeof(struct udphdr));
+
+					if(plik_hex.good())
+					{
 
 
-					int offset = sizeof(struct ether_header) + sizeof(struct ip)
-							+ sizeof(struct rtpHeader) + sizeof(struct udphdr);
+					// skipping headers: ether, ip, rtp and udp
+					int offset = sizeof(struct ether_header) + sizeof(struct ip) + sizeof(struct rtpHeader) + sizeof(struct udphdr);
 
-							short counter = 0;
-							for(u_int i = offset ; i < header->caplen ; i++, counter++)
+
+
+					short counter = 0;
+					for(u_int i = offset ; i < header->caplen ; i++, counter++)
+						{
+
+
+							// reading data as 188 bytes parts (TS packets)
+							if( !(counter % 188) )
 								{
-									if((counter % 188) == 0)
-									{
-										counter = 0;
-									}
-									bool isPES;
-									if(counter == 4 || static_cast<int>(data[i-1]) == 0xff)
-										isPES = true;
-									else
-										isPES = false;
+									plik_hex << "\n";
+									counter = 0;
+								}
 
-									if(isPES && static_cast<int>(data[i]) == 0
-											&& static_cast<int>(data[i+1]) == 0
-											&& static_cast<int>(data[i+2]) == 1)
-									{
-										int number = ++packetCount;
-										int l_byte = static_cast<int>(data[i+4]);
-										int r_byte = static_cast<int>(data[i+5]);
-										dataLength = r_byte + ((l_byte - l_byte%16) / 16)*4096 + (l_byte%16)*256 + 6;
+							static int payload = 0;
 
-										if(static_cast<int>(data[i+7]) >= 192) // PTS and DTS both
+
+							// looking for flag of payload only at TS headers
+							if(counter == 0)
+							{
+								if(static_cast<int>(data[i+3]) <= 31 || (static_cast<int>(data[i+3]) >= 208 && static_cast<int>(data[i+3]) <= 223) )
+								{
+									payload += 184;
+
+								}
+								// if payload exists with stuffing bytes
+								else
+								{
+									int stuffing = static_cast<int>(data[i+4]);
+									payload += 183 - stuffing;
+
+								}
+
+
+							}
+
+
+							plik_hex << hex << setfill('0') << setw(2) << static_cast<int>(data[i]) << " ";
+							bool isPES;
+							// byte just behind TSheader or stuffing bytes => isPES = true
+							if(counter == 4 || static_cast<int>(data[i-1]) == 0xff)
+								isPES = true;
+							else
+								isPES = false;
+
+							// looking for PES prefix (00 00 01)
+							if(isPES && static_cast<int>(data[i]) == 0
+									&& static_cast<int>(data[i+1]) == 0
+									&& static_cast<int>(data[i+2]) == 1)
+								{
+									int number = ++packetCount;
+
+
+
+									// when pts-flag == dts-flag == 1 then 7th field from prefix >= 192
+									if(static_cast<int>(data[i+7]) >= 192) // PTS and DTS both in PES Header Data
 										{
-											int byte_4 = static_cast<int>(data[i+14]);
-											int byte_3 = static_cast<int>(data[i+15]);
-											int byte_2 = static_cast<int>(data[i+16]);
-											int byte_1 = static_cast<int>(data[i+17]);
-											int byte_0 = static_cast<int>(data[i+18]);
+											if(*stamp == 1) // sorting by DTS
+												{
+													// reading each byte of DTS from bitfields
+													int byte_4 = static_cast<int>(data[i+14]);
+													int byte_3 = static_cast<int>(data[i+15]);
+													int byte_2 = static_cast<int>(data[i+16]);
+													int byte_1 = static_cast<int>(data[i+17]);
+													int byte_0 = static_cast<int>(data[i+18]);
+
+
+													// calculating DTS
+													uint64_t v = ((byte_4 - byte_4%16) / 16)*68719476736 + (byte_4%16)*4294967296
+															+ ((byte_3 - byte_3%16) / 16)*268435456 + (byte_3%16)*16777216
+															+ ((byte_2 - byte_2%16) / 16)*1048576 + (byte_2%16)*65536
+															+ ((byte_1 - byte_1%16) / 16)*4096 + (byte_1%16)*256
+															+ byte_0 ;
+
+													uint64_t dts = 0;
+													dts |= (v >> 3) & (0x0007 << 30); // top 3 bits, shifted left by 3, other bits zeroed out
+													dts |= (v >> 2) & (0x7fff << 15); // middle 15 bits
+													dts |= (v >> 1) & (0x7fff <<  0); // bottom 15 bits
+
+
+													if(dts_zero == 0)
+													{
+														dts_zero = dts;
+													}
+													else
+													{	// looking for the lowest pts_dts
+														if(dts_zero > dts)
+															dts = dts_zero;
+													}
+
+
+													// DTS have units of 1/90000 second
+													time = double(dts) / 90000;
+
+													*out_bytes += payload;
+													packet *pckt = new packet(number,time,payload);
+													out_tab.push_back(*pckt);
+													payload = 0;
+
+												}
+											else 	// sorting by PTS
+												{
+													// reading each byte of PTS from bitfields
+													int byte_4 = static_cast<int>(data[i+9]);
+													int byte_3 = static_cast<int>(data[i+10]);
+													int byte_2 = static_cast<int>(data[i+11]);
+													int byte_1 = static_cast<int>(data[i+12]);
+													int byte_0 = static_cast<int>(data[i+13]);
 
 
 
-											uint64_t v = ((byte_4 - byte_4%16) / 16)*68719476736 + (byte_4%16)*4294967296
-													+ ((byte_3 - byte_3%16) / 16)*268435456 + (byte_3%16)*16777216
-													+ ((byte_2 - byte_2%16) / 16)*1048576 + (byte_2%16)*65536
-													+ ((byte_1 - byte_1%16) / 16)*4096 + (byte_1%16)*256
-													+ byte_0 ;
-											uint64_t dts = 0;
-											dts |= (v >> 3) & (0x0007 << 30); // top 3 bits, shifted left by 3, other bits zeroed out
-											dts |= (v >> 2) & (0x7fff << 15); // middle 15 bits
-											dts |= (v >> 1) & (0x7fff <<  0); // bottom 15 bits
+													// calculating PTS
+													uint64_t v = ((byte_4 - byte_4%16) / 16)*68719476736 + (byte_4%16)*4294967296
+															+ ((byte_3 - byte_3%16) / 16)*268435456 + (byte_3%16)*16777216
+															+ ((byte_2 - byte_2%16) / 16)*1048576 + (byte_2%16)*65536
+															+ ((byte_1 - byte_1%16) / 16)*4096 + (byte_1%16)*256
+															+ byte_0 ;
 
+													uint64_t pts_dts = 0;
+													pts_dts |= (v >> 3) & (0x0007 << 30); // top 3 bits, shifted left by 3, other bits zeroed out
+													pts_dts |= (v >> 2) & (0x7fff << 15); // middle 15 bits
+													pts_dts |= (v >> 1) & (0x7fff <<  0); // bottom 15 bits
 
-											if(dts_zero_flag)
-											{
-												dts_zero = dts;
-												dts_zero_flag = false;
-											}
+													if(pts_dts_zero == 0)
+													{
+														pts_dts_zero = pts_dts;
+													}
+													else
+													{	// looking for the lowest pts_dts
+														if(pts_dts_zero > pts_dts)
+															pts_dts = pts_dts_zero;
+													}
 
+													// PTS have units of 1/90000 second
+													time = double(pts_dts) / 90000;
 
-
-											time = ((double(dts - dts_zero)) / 90000);
+													*out_bytes += payload;
+													packet *pckt = new packet(number,time,payload);
+													out_tab.push_back(*pckt);
+													payload = 0;
+												}
 										}
-										else if (static_cast<int>(data[i+7]) >= 128)// only PTS
+
+									// when pts-flag == 1 and dts-flag == 0 then 7th field from prefix >= 128
+									else if (static_cast<int>(data[i+7]) >= 128 && *stamp == 0)// only PTS in PES Header Data
 										{
+											// reading each byte of PTS from bitfields
 											int byte_4 = static_cast<int>(data[i+9]);
 											int byte_3 = static_cast<int>(data[i+10]);
 											int byte_2 = static_cast<int>(data[i+11]);
@@ -176,26 +323,38 @@ int main()
 													+ ((byte_1 - byte_1%16) / 16)*4096 + (byte_1%16)*256
 													+ byte_0 ;
 
+											// calculating PTS
 											uint64_t pts = 0;
 											pts |= (v >> 3) & (0x0007 << 30); // top 3 bits, shifted left by 3, other bits zeroed out
 											pts |= (v >> 2) & (0x7fff << 15); // middle 15 bits
 											pts |= (v >> 1) & (0x7fff <<  0); // bottom 15 bits
 
-											if(pts_zero_flag)
+
+											if(pts_zero == 0)
 											{
 												pts_zero = pts;
-												pts_zero_flag = false;
 											}
-											time = (double(pts - pts_zero)) / 90000;
+											else
+											{	// looking for the lowest pts
+												if(pts_zero > pts)
+												pts = pts_zero;
+											}
+											// PTS have units of 1/90000 second
+											time = double(pts) / 90000;
+
+											*out_bytes += payload;
+											packet *pckt = new packet(number,time,payload);
+											out_tab.push_back(*pckt);
+											payload = 0;
 										}
 
-										packet *pckt = new packet(number,time,dataLength);
-										out_tab.push_back(*pckt);
-
-									}
 
 								}
 
+						}
+
+
+					}
 				}
 			}
 
@@ -203,6 +362,56 @@ int main()
 
 
 	sort(out_tab.begin() , out_tab.end() , packet::sortByTime);
+
+
+	double p_zero = ((double)pts_zero) / 90000;
+	double pd_zero = ((double)pts_dts_zero) / 90000;
+	double d_zero = ((double)dts_zero) / 90000;
+
+//changing raw-times of packets to delta-times
+
+
+	// when sorted by dts
+	for(u_int i = 0 ; i < out_tab.size() ; i++)
+	{
+		out_tab[i].setTime(out_tab[i].getTime() - d_zero);
+
+	}
+
+	// when sorted by pts's
+	if(p_zero < pd_zero)
+		{
+			u_int i = 0;
+			for( ; out_tab[i].getTime() < pd_zero ; i++)
+			{
+				out_tab[i].setTime(out_tab[i].getTime() - p_zero);
+			}
+
+			for( ; i < out_tab.size() ; i++)
+			{
+				out_tab[i].setTime(out_tab[i].getTime() - pd_zero);
+
+			}
+
+		}
+	else
+		{
+			u_int i = 0;
+			for( ; out_tab[i].getTime() < p_zero ; i++)
+			{
+				out_tab[i].setTime(out_tab[i].getTime() - pd_zero);
+			}
+
+
+			for( ; i < out_tab.size() ; i++)
+			{
+				out_tab[i].setTime(out_tab[i].getTime() - p_zero);
+			}
+
+		}
+
+	sort(out_tab.begin() , out_tab.end() , packet::sortByTime);
+
 
 
 	double delta = 0;
@@ -288,14 +497,32 @@ int main()
 		stat << "bufor byl pusty lacznie przez: " << setprecision(8) << buff->getEmptyTime() << " sekund\n";
 		stat << "lacznie zaladowano danych: " << buff->getUploaded() << " bajtow\n";
 		stat << "lacznie pobrano danych: " << buff->getDownloaded() << " bajtow\n";
+		stat << "liczba bajtów odczytanych z pliku wejściowegoc: " << *in_bytes << "\n";
+		stat << "liczba bajtów odczytanych z pliku wyjściowego: " << *out_bytes << "\n";
+
 
 		delete buff;
 	}
 
 	cout << "statystyka zajetosci bufora znajduje sie w pliku: statistics.txt \n";
 
+
+
 	plik_out.close();
-//	plik_hex.close();
+	plik_hex.close();
 	stat.close();
+	delete in_bytes;
 	return 0;
+}
+
+
+
+
+bool insertInSet(set<long long int> &s , long long int number)
+{
+	pair<set<long long int>::iterator , bool> result;
+
+	result = s.insert(number);
+
+	return result.second;
 }

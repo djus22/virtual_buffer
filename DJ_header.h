@@ -13,6 +13,7 @@
 #include <pcap.h>
 #include <string>
 #include <vector>
+#include <set>
 #include <iomanip>
 #include <fstream>
 #include <net/ethernet.h>
@@ -20,6 +21,7 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
+
 #include <arpa/inet.h>
 #include <algorithm>
 #include "Buffer.h"
@@ -50,6 +52,6 @@ struct rtpHeader {
         u_int32_t timestamp;       //  timestamp
         u_int32_t sources[1];      // contributing sources
 };
-
+bool insertInSet(set<long long int> &s , long long int number);
 
 #endif /* DJ_HEADER_H_ */
