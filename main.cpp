@@ -5,7 +5,10 @@
 using namespace std;
 int main()
 {
-	string file = "plik_wejsciowy.pcap";
+//	string file = "plik_wejsciowy.pcap";
+//	string file = "plik_in.pcap";
+//	string file = "test_mp4_over_http.pcap";
+	string file = "test_mp4_over_http_server_v3.pcap";
 
 
 	char errbuff[PCAP_ERRBUF_SIZE];
@@ -50,7 +53,8 @@ int main()
 
 					number = ++packetCount;
 
-
+/*
+//##################################################################################################################################################################################################################################################################################################################################################################################################################################################################
 					// checking if packet is a HTTP header
 					for(u_int i = offset ; i < header->len ; i++)
 					{
@@ -65,7 +69,8 @@ int main()
 						}
 
 					}
-
+//####################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################
+*/
 
 					//calculating paylod size (packet reduced by ether, ip, tcp and optional http headers)
 					dataLength = header->len - offset;
@@ -117,7 +122,9 @@ int main()
 
 //***********************************************************************************************************************
 
-	file = "vodtest3rtp_odfiltrowany2.pcap";
+//	file = "vodtest3rtp_odfiltrowany2.pcap";
+	file = "plik_out.pcap";
+
 	pcap = pcap_open_offline(file.c_str(), errbuff);
 
 	vector<packet> out_tab;
@@ -180,6 +187,7 @@ int main()
 								}
 
 							static int payload = 0;
+							int stuffing = 0;
 
 
 							// looking for flag of payload only at TS headers
@@ -193,13 +201,14 @@ int main()
 								// if payload exists with stuffing bytes
 								else
 								{
-									int stuffing = static_cast<int>(data[i+4]);
+									stuffing = static_cast<int>(data[i+4]);
 									payload += 183 - stuffing;
 
 								}
 
 
 							}
+
 
 
 							plik_hex << hex << setfill('0') << setw(2) << static_cast<int>(data[i]) << " ";
